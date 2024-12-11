@@ -64,6 +64,18 @@ config_blob = """{
             "color": [255, 204, 153, 128],
             "radius": 135,
             "map_threshold": 0.201
+        },
+        {
+            "name": "membrane",
+            "is_particle": false,
+            "label": 8,
+            "color": [100, 100, 100, 128]
+        },
+        {
+            "name": "background",
+            "is_particle": false,
+            "label": 9,
+            "color": [10, 150, 200, 128]
         }
     ],
 
