@@ -67,17 +67,17 @@ config_blob = """{
         }
     ],
 
-    "overlay_root": "/kaggle/working/test/overlay",
+    "overlay_root": "/media/michele/DATA-2/Datasets/kaggle_cryo_et/working/test/overlay",
 
     "overlay_fs_args": {
         "auto_mkdir": true
     },
 
-    "static_root": "/kaggle/input/czii-cryo-et-object-identification/test/static"
+    "static_root": "/media/michele/DATA-2/Datasets/kaggle_cryo_et/test/static"
 }"""
 
 copick_config_path = "/media/michele/DATA-2/Datasets/kaggle_cryo_et/copick/copick.config"
-os.makedirs(os.path.dirname(copick_config_path))
+os.makedirs(os.path.dirname(copick_config_path), exist_ok=True)
 with open(copick_config_path, "w") as f:
     f.write(config_blob)
 print(f"Config path saved to {copick_config_path}")
