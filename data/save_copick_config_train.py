@@ -1,6 +1,6 @@
 """
-One-time script to save the copick configuration to parse the data
-Code from https://www.kaggle.com/code/kharrington/blobdetector
+One-time script to save the copick configuration to parse the training data
+Code from https://www.kaggle.com/code/kharrington/deepfindet-train
 """
 
 import os

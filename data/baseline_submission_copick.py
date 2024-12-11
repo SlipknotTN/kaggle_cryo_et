@@ -153,7 +153,7 @@ def process_all_runs(
 def do_parsing():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description="Process the data with copick",
+        description="Produce the baseline submission CSV processing the data with Copick",
     )
     parser.add_argument(
         "--copick_config_path",
@@ -168,6 +168,12 @@ def do_parsing():
         default="denoised",
         type=str,
         help="Tomograph type",
+    )
+    parser.add_argument(
+        "--voxel_spacing",
+        required=False,
+        default=10,
+        help="Voxel spacing used to produce the data"
     )
     parser.add_argument(
         "--resolution_threshold",
@@ -202,7 +208,7 @@ def main():
         root=root,
         session_id="0",
         user_id="blobDetector",
-        voxel_spacing=10,
+        voxel_spacing=args.voxel_spacing,
         tomo_type=args.tomo_type,
         resolution_threshold=args.resolution_threshold,
         device=args.device,

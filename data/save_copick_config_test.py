@@ -1,5 +1,5 @@
 """
-One-time script to save the copick configuration to parse the data
+One-time script to save the copick configuration to parse the test data
 Code from https://www.kaggle.com/code/kharrington/blobdetector
 """
 
