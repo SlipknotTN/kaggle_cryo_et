@@ -76,7 +76,9 @@ config_blob = """{
     "static_root": "/media/michele/DATA-2/Datasets/kaggle_cryo_et/test/static"
 }"""
 
-copick_config_path = "/media/michele/DATA-2/Datasets/kaggle_cryo_et/copick/copick.config"
+copick_config_path = (
+    "/media/michele/DATA-2/Datasets/kaggle_cryo_et/copick/copick.config"
+)
 os.makedirs(os.path.dirname(copick_config_path), exist_ok=True)
 with open(copick_config_path, "w") as f:
     f.write(config_blob)
