@@ -77,7 +77,7 @@ config_blob = """{
 }"""
 
 copick_config_path = (
-    "/media/michele/DATA-2/Datasets/kaggle_cryo_et/copick/copick.config"
+    "/media/michele/DATA-2/Datasets/kaggle_cryo_et/test/copick.config"
 )
 os.makedirs(os.path.dirname(copick_config_path), exist_ok=True)
 with open(copick_config_path, "w") as f:
