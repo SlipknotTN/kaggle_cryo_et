@@ -79,7 +79,7 @@ config_blob = """{
         }
     ],
 
-    "overlay_root": "/media/michele/DATA-2/Datasets/kaggle_cryo_et/working/train/overlay",
+    "overlay_root": "/media/michele/DATA-2/Datasets/kaggle_cryo_et/train/overlay",
 
     "overlay_fs_args": {
         "auto_mkdir": true
