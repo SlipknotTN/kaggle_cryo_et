@@ -1,0 +1,9 @@
+    # TODO: Save the train data as numpy array
+    # TODO: Create a script to visualize the created arrays
+    # annotations_zyx = np.zeros(shape=high_res_tomogram_zyx, dtype=np.int32)
+    # picks = run.get_picks(particle_name, user_id="curation", session_id="0")
+    #assert len(picks) == 1
+    # for point in picks[0].points:
+    #     # Get location coordinates considering the voxel spacing (conversion from Angstrom to voxel coordinates)
+    #     point_x, point_y, point_z = round(point.location.x / args.voxel_spacing), round(point.location.y / args.voxel_spacing), round(point.location.z / args.voxel_spacing)
+    #     pass
