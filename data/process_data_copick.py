@@ -48,20 +48,6 @@ def do_parsing():
         help="Tomograph type",
     )
     parser.add_argument(
-        "--user_id",
-        required=False,
-        default="slipi",
-        type=str,
-        help="user_id to use when creating the dataset",
-    )
-    parser.add_argument(
-        "--session_id",
-        required=False,
-        default="1",
-        type=str,
-        help="session_id to use when creating the dataset",
-    )
-    parser.add_argument(
         "--voxel_spacing",
         required=False,
         default=10,
@@ -112,65 +98,58 @@ def main():
         print(
             f"Run {run.name}, high res tomogram shape {high_res_tomogram_zyx.shape}"
         )
-        targets = dict()
 
-        for particle_name, particle_metadata in particles.items():
-            info = {
-                "label": particle_metadata["label"],
-                "user_id": args.user_id,
-                "session_id": args.session_id,
-                "radius": particle_metadata["radius"],
-                "is_particle_target": True,
-            }
-            targets[particle_name] = info
-
+        # TODO: Use uint8 annotations to save space?
         annotations_zyx = np.zeros(
             shape=high_res_tomogram_zyx.shape, dtype=np.int32
         )
-        picks = run.get_picks(particle_name, user_id="curation", session_id="0")
-        assert len(picks) == 1
-        # Draw sphere manually setting to label every point at distance <= radius from the center
-        # Do the comparison in a cube around the center to speed up the comparison
-        for point in picks[0].points:
-            # Get location coordinates and radius converting from Angstrom to voxel coordinates
-            point_x, point_y, point_z = (
-                round(point.location.x / args.voxel_spacing),
-                round(point.location.y / args.voxel_spacing),
-                round(point.location.z / args.voxel_spacing),
-            )
-            radius = round(
-                particles[particle_name]["radius"] / args.voxel_spacing
-            )
-            # Crop annotations_zyx around the cube around the sphere
-            min_cube_point_z = max(0, point_z - radius)
-            max_cube_point_z = min(
-                annotations_zyx.shape[0] - 1, point_z + radius
-            )
-            min_cube_point_y = max(0, point_y - radius)
-            max_cube_point_y = min(
-                annotations_zyx.shape[1] - 1, point_y + radius
-            )
-            min_cube_point_x = max(0, point_x - radius)
-            max_cube_point_x = min(
-                annotations_zyx.shape[0] - 1, point_x + radius
-            )
-            cube = annotations_zyx[
-                min_cube_point_z:max_cube_point_z,
-                min_cube_point_y:max_cube_point_y,
-                min_cube_point_x:max_cube_point_x,
-            ]
-            cube_center_zyx = (
-                point_z - min_cube_point_z,
-                point_y - min_cube_point_y,
-                point_x - min_cube_point_x,
-            )
-            # First one preferred
-            set_sphere_to_label(
-                cube_zyx_inout=cube,
-                center_zyx=cube_center_zyx,
-                radius=radius,
-                label=particles[particle_name]["label"],
-            )
+
+        for particle_name, particle_metadata in tqdm(particles.items(), desc="particle"):
+
+            picks = run.get_picks(particle_name, user_id="curation", session_id="0")
+            assert len(picks) == 1
+            # Draw sphere manually setting to label every point at distance <= radius from the center
+            # Do the comparison in a cube around the center to speed up the comparison
+            for point in picks[0].points:
+                # Get location coordinates and radius converting from Angstrom to voxel coordinates
+                point_x, point_y, point_z = (
+                    round(point.location.x / args.voxel_spacing),
+                    round(point.location.y / args.voxel_spacing),
+                    round(point.location.z / args.voxel_spacing),
+                )
+                radius = round(
+                    particles[particle_name]["radius"] / args.voxel_spacing
+                )
+                # Crop annotations_zyx around the cube around the sphere
+                min_cube_point_z = max(0, point_z - radius)
+                max_cube_point_z = min(
+                    annotations_zyx.shape[0] - 1, point_z + radius
+                )
+                min_cube_point_y = max(0, point_y - radius)
+                max_cube_point_y = min(
+                    annotations_zyx.shape[1] - 1, point_y + radius
+                )
+                min_cube_point_x = max(0, point_x - radius)
+                max_cube_point_x = min(
+                    annotations_zyx.shape[0] - 1, point_x + radius
+                )
+                cube = annotations_zyx[
+                    min_cube_point_z:max_cube_point_z,
+                    min_cube_point_y:max_cube_point_y,
+                    min_cube_point_x:max_cube_point_x,
+                ]
+                cube_center_zyx = (
+                    point_z - min_cube_point_z,
+                    point_y - min_cube_point_y,
+                    point_x - min_cube_point_x,
+                )
+                # First one preferred
+                set_sphere_to_label(
+                    cube_zyx_inout=cube,
+                    center_zyx=cube_center_zyx,
+                    radius=radius,
+                    label=particles[particle_name]["label"],
+                )
 
         output_npy_filepath = os.path.join(args.output_dir, f"{run.name}.npy")
         os.makedirs(os.path.dirname(output_npy_filepath), exist_ok=True)
