@@ -27,7 +27,9 @@ def gaussian_kernel(size: Tuple[int, int, int], sigma: int, device: str):
     )  # Add batch and channel dimensions
 
 
-def create_hessian_particle_mask(tomogram: torch.Tensor, sigma: int, device: str):
+def create_hessian_particle_mask(
+    tomogram: torch.Tensor, sigma: int, device: str
+):
     """
     Generate a binary mask for dark, blob-like particles in a cryo-ET tomogram
     using Hessian-based filtering with PyTorch.
@@ -57,13 +59,17 @@ def create_hessian_particle_mask(tomogram: torch.Tensor, sigma: int, device: str
         tomogram_smoothed.unsqueeze(0).unsqueeze(0), gaussian_k, padding=2
     )
 
-    hessian_response = hessian_xx + hessian_yy + hessian_xy  # Simplified combination
+    hessian_response = (
+        hessian_xx + hessian_yy + hessian_xy
+    )  # Simplified combination
     binary_mask = hessian_response < 0  # Adjust threshold based on your needs
 
     return binary_mask.squeeze().byte()
 
 
-def erode_dilate_mask(mask: torch.Tensor, radius: int, device: str) -> torch.Tensor:
+def erode_dilate_mask(
+    mask: torch.Tensor, radius: int, device: str
+) -> torch.Tensor:
     """
     Perform binary erosion and dilation on a binary mask using a spherical structuring element.
 
@@ -84,7 +90,9 @@ def erode_dilate_mask(mask: torch.Tensor, radius: int, device: str) -> torch.Ten
     )
 
     # Reshape mask for conv3d
-    mask_reshaped = mask.unsqueeze(0).unsqueeze(0).float()  # Shape (1, 1, D, H, W)
+    mask_reshaped = (
+        mask.unsqueeze(0).unsqueeze(0).float()
+    )  # Shape (1, 1, D, H, W)
 
     # Calculate padding size - ensure it's an integer
     pad_size = int(radius // 2)
@@ -108,16 +116,29 @@ def erode_dilate_mask(mask: torch.Tensor, radius: int, device: str) -> torch.Ten
 
     mask_padded = F.pad(mask_reshaped, pad_3d, mode="constant", value=1)
     eroded = -F.conv3d(
-        -mask_padded, struct_elem_tensor, stride=1, padding=0, dilation=1, groups=1
+        -mask_padded,
+        struct_elem_tensor,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
     )
     eroded = (eroded >= struct_elem_tensor.sum()).squeeze().byte()
 
     # Dilation
     mask_padded = F.pad(
-        eroded.unsqueeze(0).unsqueeze(0).float(), pad_3d, mode="constant", value=0
+        eroded.unsqueeze(0).unsqueeze(0).float(),
+        pad_3d,
+        mode="constant",
+        value=0,
     )
     dilated = F.conv3d(
-        mask_padded, struct_elem_tensor, stride=1, padding=0, dilation=1, groups=1
+        mask_padded,
+        struct_elem_tensor,
+        stride=1,
+        padding=0,
+        dilation=1,
+        groups=1,
     )
     dilated = (dilated > 0).squeeze().byte()
 
@@ -170,7 +191,9 @@ def local_maxima(distance: torch.Tensor, radius: int) -> torch.Tensor:
     kernel_size = (2 * radius + 1, 2 * radius + 1, 2 * radius + 1)
 
     # Compute local maxima
-    maxpool = F.max_pool3d(distance, kernel_size=kernel_size, stride=1, padding=radius)
+    maxpool = F.max_pool3d(
+        distance, kernel_size=kernel_size, stride=1, padding=radius
+    )
 
     # Compare with original distance to find local maxima
     local_max = distance == maxpool
@@ -200,7 +223,9 @@ def get_tomogram_data(
     Returns:
         tuple: (tomogram tensor, effective_voxel_spacing, scale_factor)
     """
-    tomogram_wrapper = run.get_voxel_spacing(voxel_spacing).get_tomogram(tomo_type)
+    tomogram_wrapper = run.get_voxel_spacing(voxel_spacing).get_tomogram(
+        tomo_type
+    )
     z = zarr.open(store=tomogram_wrapper.zarr(), path="/", mode="r")
 
     if radius <= resolution_threshold:
@@ -211,7 +236,13 @@ def get_tomogram_data(
     else:
         # Use medium resolution
         tomogram = z["1"][:]
-        effective_voxel_spacing = voxel_spacing * 2  # Scale factor is 2 for level 1
+        effective_voxel_spacing = (
+            voxel_spacing * 2
+        )  # Scale factor is 2 for level 1
         scale_factor = 2
 
-    return torch.tensor(tomogram).to(device), effective_voxel_spacing, scale_factor
+    return (
+        torch.tensor(tomogram).to(device),
+        effective_voxel_spacing,
+        scale_factor,
+    )

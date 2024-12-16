@@ -2,6 +2,7 @@
 Code copied from the official notebook https://www.kaggle.com/code/kharrington/blobdetector
 Runtime errors about types are expected
 """
+
 import argparse
 import csv
 import time
@@ -15,13 +16,9 @@ from skimage.measure import regionprops
 from skimage.segmentation import watershed
 from tqdm import tqdm
 
-from shared.processing import (
-    create_hessian_particle_mask,
-    distance_transform,
-    erode_dilate_mask,
-    get_tomogram_data,
-    local_maxima,
-)
+from shared.processing import (create_hessian_particle_mask,
+                               distance_transform, erode_dilate_mask,
+                               get_tomogram_data, local_maxima)
 
 
 def process_all_runs(
@@ -51,7 +48,11 @@ def process_all_runs(
             print(f"Processing {obj.name} with radius {radius}")
 
             # Get appropriate resolution data
-            tomogram_tensor, effective_voxel_spacing, scale_factor = get_tomogram_data(
+            (
+                tomogram_tensor,
+                effective_voxel_spacing,
+                scale_factor,
+            ) = get_tomogram_data(
                 run,
                 voxel_spacing,
                 radius,
@@ -79,7 +80,9 @@ def process_all_runs(
             scaled_radius = round(scaled_radius)
 
             # Erode and dilate the segmentation
-            dilated_mask = erode_dilate_mask(segmentation, scaled_radius, device=device)
+            dilated_mask = erode_dilate_mask(
+                segmentation, scaled_radius, device=device
+            )
 
             # Distance transform and local maxima detection
             distance = distance_transform(dilated_mask, device=device)
@@ -92,7 +95,9 @@ def process_all_runs(
 
             # Watershed segmentation
             markers, _ = ndi.label(local_max_np)
-            watershed_labels = watershed(-distance_np, markers, mask=dilated_mask_np)
+            watershed_labels = watershed(
+                -distance_np, markers, mask=dilated_mask_np
+            )
 
             # Extract region properties and scale coordinates back to original space
             centroids = []
@@ -136,7 +141,9 @@ def process_all_runs(
 
         # Print timing for this run
         end_time = time.time()
-        print(f"Run {run.meta.name} completed in {end_time - start_time:.2f} seconds")
+        print(
+            f"Run {run.meta.name} completed in {end_time - start_time:.2f} seconds"
+        )
 
     print(f"\nTotal picks found: {len(results)}")
 
@@ -173,7 +180,7 @@ def do_parsing():
         "--voxel_spacing",
         required=False,
         default=10,
-        help="Voxel spacing used to produce the data"
+        help="Voxel spacing used to produce the data",
     )
     parser.add_argument(
         "--resolution_threshold",

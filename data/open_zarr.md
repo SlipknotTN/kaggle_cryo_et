@@ -24,3 +24,7 @@ https://copick.github.io/copick/
 Competition official notebook that builds a baseline and loads the test data
 with copick https://www.kaggle.com/code/kharrington/blobdetector
 
+Manipulate the data for 3D convolutional networks (e.g. extend points into spheres)
+https://github.com/copick/DeepFindET
+
+Interesting suggestions about augmentation: https://github.com/copick/DeepFindET/blob/main/tutorials/augment.ipynb
