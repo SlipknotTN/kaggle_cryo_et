@@ -99,14 +99,16 @@ def main():
             f"Run {run.name}, high res tomogram shape {high_res_tomogram_zyx.shape}"
         )
 
-        # TODO: Use uint8 annotations to save space?
         annotations_zyx = np.zeros(
-            shape=high_res_tomogram_zyx.shape, dtype=np.int32
+            shape=high_res_tomogram_zyx.shape, dtype=np.uint8
         )
 
-        for particle_name, particle_metadata in tqdm(particles.items(), desc="particle"):
-
-            picks = run.get_picks(particle_name, user_id="curation", session_id="0")
+        for particle_name, particle_metadata in tqdm(
+            particles.items(), desc="particle"
+        ):
+            picks = run.get_picks(
+                particle_name, user_id="curation", session_id="0"
+            )
             assert len(picks) == 1
             # Draw sphere manually setting to label every point at distance <= radius from the center
             # Do the comparison in a cube around the center to speed up the comparison

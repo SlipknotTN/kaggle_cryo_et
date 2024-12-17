@@ -36,7 +36,7 @@ def do_parsing():
         "--annotations_dir",
         required=True,
         type=str,
-        help="Annotations directory including one numpy file for each experiment run"
+        help="Annotations directory including one numpy file for each experiment run",
     )
     args = parser.parse_args()
     return args
@@ -51,7 +51,11 @@ def main():
         if not obj.is_particle:
             continue
         print(f"Name: {obj.name}, radius: {obj.radius}")
-        particles[obj.name] = {"radius": obj.radius, "label": obj.label, "color": obj.color}
+        particles[obj.name] = {
+            "radius": obj.radius,
+            "label": obj.label,
+            "color": obj.color,
+        }
 
     for run in tqdm(root_copick.runs, desc="experiment_run"):
         # Read tomograms as numpy array
@@ -60,36 +64,69 @@ def main():
         ).get_tomogram(args.tomo_type)
         z = zarr.open(store=tomogram_wrapper.zarr(), path="/", mode="r")
         high_res_tomogram_zyx = z["0"][:]
-        annotations_zyx = np.load(os.path.join(args.annotations_dir, f"{run.name}.npy"))
+        annotations_zyx = np.load(
+            os.path.join(args.annotations_dir, f"{run.name}.npy")
+        )
 
-        for particle_name, particle_metadata in tqdm(particles.items(), desc="particle"):
-
-            picks = run.get_picks(particle_name, user_id="curation", session_id="0")
+        for particle_name, particle_metadata in tqdm(
+            particles.items(), desc="particle"
+        ):
+            picks = run.get_picks(
+                particle_name, user_id="curation", session_id="0"
+            )
             assert len(picks) == 1
+
+            # Visualize each annotation independently
             for point in picks[0].points:
                 # Visualize the yx slice at z level
                 z_slice_index = round(point.location.z / args.voxel_spacing)
-                # TODO: Draw annotation center in tomogram image
-                # TODO: Draw sphere annotation overlay?
-                # TODO: Draw all particles annotations?
                 tomogram_slice_yx = high_res_tomogram_zyx[z_slice_index]
-                # Annotation yx slice
-                ann_slice_yx = annotations_zyx[z_slice_index].astype(np.uint8)
-                # The color is defined by 4 values?!
-                #ann_slice_yx = (ann_slice_yx == particles[particle_name]["label"]).astype(np.uint8)
-                #ann_slice_yx[ann_slice_yx > 0] = particles[particle_name]["color"]
-                # Just set white color
-                ann_slice_yx[ann_slice_yx != particles[particle_name]["label"]] = 0
-                ann_slice_yx[ann_slice_yx == particles[particle_name]["label"]] = 255
-                tomogram_slice_yx_img = ((tomogram_slice_yx - np.min(tomogram_slice_yx)) / (np.max(tomogram_slice_yx) - np.min(tomogram_slice_yx))) * 255
-                tomogram_slice_yx_img = tomogram_slice_yx_img.astype(np.uint8)
+                tomogram_slice_yx_img_gray = (
+                    (tomogram_slice_yx - np.min(tomogram_slice_yx))
+                    / (np.max(tomogram_slice_yx) - np.min(tomogram_slice_yx))
+                ) * 255
+                tomogram_slice_yx_img_gray = tomogram_slice_yx_img_gray.astype(
+                    np.uint8
+                )
 
-                cv2.imshow( f"tomogram_yx_slice_{z_slice_index}", tomogram_slice_yx_img)
-                cv2.imshow(f"annotation_{particle_name}_yx_slice_{z_slice_index}", ann_slice_yx)
+                # Annotation yx slice, just set the white color corresponding to the annotation sphere
+                ann_slice_yx_gray = annotations_zyx[z_slice_index]
+                ann_slice_yx_gray[
+                    ann_slice_yx_gray != particles[particle_name]["label"]
+                ] = 0
+                ann_slice_yx_gray[
+                    ann_slice_yx_gray == particles[particle_name]["label"]
+                ] = 255
+
+                # Tomogram with annotation overlay
+                tomogram_slice_yx_img_bgr = cv2.cvtColor(
+                    tomogram_slice_yx_img_gray, cv2.COLOR_GRAY2BGR
+                )
+                ann_slice_yx_bgr = cv2.cvtColor(
+                    ann_slice_yx_gray, cv2.COLOR_GRAY2BGR
+                )
+                # Set the color corresponding to the particle type
+                ann_slice_yx_bgr = np.where(
+                    ann_slice_yx_bgr == [255, 255, 255],
+                    particle_metadata["color"][:3],
+                    ann_slice_yx_bgr,
+                ).astype(np.uint8)
+                tomogram_slice_yx_img_ann = cv2.addWeighted(
+                    tomogram_slice_yx_img_bgr, 0.5, ann_slice_yx_bgr, 0.15, 0
+                )
+
+                window_name_1 = f"tomogram_yx_z={z_slice_index}"
+                cv2.imshow(window_name_1, tomogram_slice_yx_img_gray)
+                window_name_2 = (
+                    f"annotation_{particle_name}_yx_z={z_slice_index}"
+                )
+                cv2.imshow(window_name_2, ann_slice_yx_gray)
+                window_name_3 = f"tomogram_with_annotation_{particle_name}_yx_z={z_slice_index}"
+                cv2.imshow(window_name_3, tomogram_slice_yx_img_ann)
                 cv2.waitKey(0)
-                cv2.destroyWindow(f"tomogram_yx_slice_{z_slice_index}")
-                cv2.destroyWindow(f"annotation_{particle_name}_yx_slice_{z_slice_index}")
-
+                cv2.destroyWindow(window_name_1)
+                cv2.destroyWindow(window_name_2)
+                cv2.destroyWindow(window_name_3)
 
 
 if __name__ == "__main__":

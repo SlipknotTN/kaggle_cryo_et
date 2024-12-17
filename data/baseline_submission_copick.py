@@ -16,9 +16,13 @@ from skimage.measure import regionprops
 from skimage.segmentation import watershed
 from tqdm import tqdm
 
-from shared.processing import (create_hessian_particle_mask,
-                               distance_transform, erode_dilate_mask,
-                               get_tomogram_data, local_maxima)
+from shared.processing import (
+    create_hessian_particle_mask,
+    distance_transform,
+    erode_dilate_mask,
+    get_tomogram_data,
+    local_maxima,
+)
 
 
 def process_all_runs(
