@@ -8,6 +8,23 @@ import zarr
 from tqdm import tqdm
 
 
+def normalize_min_max(input_gray):
+    output_gray = (
+        (input_gray - np.min(input_gray))
+        / (np.max(input_gray) - np.min(input_gray))
+    ) * 255
+    output_gray = output_gray.astype(np.uint8)
+    return output_gray
+
+
+def set_ann_value(ann_slice_yx_gray, label):
+    """
+    Set white color where the specific label is set, black otherwise
+    """
+    ann_slice_yx_gray[ann_slice_yx_gray != label] = 0
+    ann_slice_yx_gray[ann_slice_yx_gray == label] = 255
+
+
 def do_parsing():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -78,27 +95,35 @@ def main():
 
             # Visualize each annotation independently
             for point in picks[0].points:
-                # Visualize the yx slice at z level
-                z_slice_index = round(point.location.z / args.voxel_spacing)
-                tomogram_slice_yx = high_res_tomogram_zyx[z_slice_index]
-                tomogram_slice_yx_img_gray = (
-                    (tomogram_slice_yx - np.min(tomogram_slice_yx))
-                    / (np.max(tomogram_slice_yx) - np.min(tomogram_slice_yx))
-                ) * 255
-                tomogram_slice_yx_img_gray = tomogram_slice_yx_img_gray.astype(
-                    np.uint8
+                # Center
+                x_slice_idx = round(point.location.x / args.voxel_spacing)
+                y_slice_idx = round(point.location.y / args.voxel_spacing)
+                z_slice_idx = round(point.location.z / args.voxel_spacing)
+                print(
+                    f"{particle_name} at z, y, x: {z_slice_idx}, {y_slice_idx}, {x_slice_idx}"
                 )
 
-                # Annotation yx slice, just set the white color corresponding to the annotation sphere
-                ann_slice_yx_gray = annotations_zyx[z_slice_index]
-                ann_slice_yx_gray[
-                    ann_slice_yx_gray != particles[particle_name]["label"]
-                ] = 0
-                ann_slice_yx_gray[
-                    ann_slice_yx_gray == particles[particle_name]["label"]
-                ] = 255
+                # Visualize the yx slice at z level
+                tomogram_slice_yx = high_res_tomogram_zyx[z_slice_idx]
+                tomogram_slice_yx_img_gray = normalize_min_max(
+                    tomogram_slice_yx
+                )
 
-                # Tomogram with annotation overlay
+                # Visualize the zx slice
+                tomogram_slice_zx = high_res_tomogram_zyx[:, y_slice_idx, :]
+                tomogram_slice_zx_img_gray = normalize_min_max(
+                    tomogram_slice_zx
+                )
+
+                # Annotation yx slice at z
+                ann_slice_yx_gray = annotations_zyx[z_slice_idx]
+                set_ann_value(ann_slice_yx_gray, particle_metadata["label"])
+
+                # Annotation zx slice at y
+                ann_slice_zx_gray = annotations_zyx[:, y_slice_idx, :]
+                set_ann_value(ann_slice_zx_gray, particle_metadata["label"])
+
+                # Tomogram with annotation overlay at z
                 tomogram_slice_yx_img_bgr = cv2.cvtColor(
                     tomogram_slice_yx_img_gray, cv2.COLOR_GRAY2BGR
                 )
@@ -115,18 +140,22 @@ def main():
                     tomogram_slice_yx_img_bgr, 0.5, ann_slice_yx_bgr, 0.15, 0
                 )
 
-                window_name_1 = f"tomogram_yx_z={z_slice_index}"
+                window_name_1 = f"tomogram_yx_z={z_slice_idx}"
                 cv2.imshow(window_name_1, tomogram_slice_yx_img_gray)
-                window_name_2 = (
-                    f"annotation_{particle_name}_yx_z={z_slice_index}"
-                )
+                window_name_2 = f"annotation_{particle_name}_yx_z={z_slice_idx}"
                 cv2.imshow(window_name_2, ann_slice_yx_gray)
-                window_name_3 = f"tomogram_with_annotation_{particle_name}_yx_z={z_slice_index}"
+                window_name_3 = f"tomogram_with_annotation_{particle_name}_yx_z={z_slice_idx}"
                 cv2.imshow(window_name_3, tomogram_slice_yx_img_ann)
+                window_name_4 = f"tomogram_zx_y={y_slice_idx}"
+                cv2.imshow(window_name_4, tomogram_slice_zx_img_gray)
+                window_name_5 = f"annotation_{particle_name}_zx_y={y_slice_idx}"
+                cv2.imshow(window_name_5, ann_slice_zx_gray)
                 cv2.waitKey(0)
                 cv2.destroyWindow(window_name_1)
                 cv2.destroyWindow(window_name_2)
                 cv2.destroyWindow(window_name_3)
+                cv2.destroyWindow(window_name_4)
+                cv2.destroyWindow(window_name_5)
 
 
 if __name__ == "__main__":

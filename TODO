@@ -1,2 +1,4 @@
-# TODO: Complete the script to visualize the created dataset as 2D slices
-# TODO: Check copick_tools for the visualization scope
+# TODO: Check multiple annotations in the same space, is instance level segmentation all vs all?
+# TODO: Why apo-ferritin at z, y, x: 57, 111, 567 is not visible in visualization? Overwritten by other particles?
+# TODO: Visualize zx and zy slices on visualize_data_2d.py. WIP
+# TODO: Visualization annotations as 3D point cloud
