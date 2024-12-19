@@ -133,7 +133,7 @@ def main():
                 )
                 min_cube_point_x = max(0, point_x - radius)
                 max_cube_point_x = min(
-                    annotations_zyx.shape[0] - 1, point_x + radius
+                    annotations_zyx.shape[2] - 1, point_x + radius
                 )
                 cube = annotations_zyx[
                     min_cube_point_z:max_cube_point_z,

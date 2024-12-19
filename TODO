@@ -1,3 +1,2 @@
 # TODO: Check multiple annotations in the same space, is instance level segmentation all vs all?
-# TODO: Why apo-ferritin at z, y, x: 57, 111, 567 is not visible in visualization? Overwritten by other particles?
 # TODO: Visualization annotations as 3D point cloud

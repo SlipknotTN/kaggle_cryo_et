@@ -25,15 +25,18 @@ def set_ann_value(ann_slice_yx_gray, label):
     ann_slice_yx_gray[ann_slice_yx_gray == label] = 255
 
 
-def visualize_slice(tomogram_slice_gray, ann_slice_gray, particle_metadata, particle_name, slice_idx, slice_dim: str):
+def visualize_slice(
+    tomogram_slice_gray,
+    ann_slice_gray,
+    particle_metadata,
+    particle_name,
+    slice_idx,
+    slice_dim: str,
+):
     set_ann_value(ann_slice_gray, particle_metadata["label"])
     # Tomogram with annotation overlay at z
-    tomogram_slice_bgr = cv2.cvtColor(
-        tomogram_slice_gray, cv2.COLOR_GRAY2BGR
-    )
-    ann_slice_bgr = cv2.cvtColor(
-        ann_slice_gray, cv2.COLOR_GRAY2BGR
-    )
+    tomogram_slice_bgr = cv2.cvtColor(tomogram_slice_gray, cv2.COLOR_GRAY2BGR)
+    ann_slice_bgr = cv2.cvtColor(ann_slice_gray, cv2.COLOR_GRAY2BGR)
     # Set the color corresponding to the particle type
     ann_slice_bgr = np.where(
         ann_slice_bgr == [255, 255, 255],
@@ -50,10 +53,20 @@ def visualize_slice(tomogram_slice_gray, ann_slice_gray, particle_metadata, part
     elif slice_dim == "x":
         window_title_before_equal = "zy_x"
     else:
-        raise ValueError(f"slice_dim {slice_dim} not supported, must be x, y or z")
-    cv2.imshow(f"tomogram_{window_title_before_equal}={slice_idx}", tomogram_slice_gray)
-    cv2.imshow(f"annotation_{particle_name}_{window_title_before_equal}={slice_idx}", ann_slice_gray)
-    cv2.imshow(f"tomogram_with_annotation_{particle_name}_{window_title_before_equal}={slice_idx}", tomogram_slice_bgr_with_ann)
+        raise ValueError(
+            f"slice_dim {slice_dim} not supported, must be x, y or z"
+        )
+    cv2.imshow(
+        f"tomogram_{window_title_before_equal}={slice_idx}", tomogram_slice_gray
+    )
+    cv2.imshow(
+        f"annotation_{particle_name}_{window_title_before_equal}={slice_idx}",
+        ann_slice_gray,
+    )
+    cv2.imshow(
+        f"tomogram_with_annotation_{particle_name}_{window_title_before_equal}={slice_idx}",
+        tomogram_slice_bgr_with_ann,
+    )
 
 
 def do_parsing():
@@ -136,43 +149,45 @@ def main():
 
                 # Visualize the yx slice at z level
                 tomogram_slice_yx = high_res_tomogram_zyx[z_slice_idx]
-                tomogram_slice_yx_gray = normalize_min_max(
-                    tomogram_slice_yx
-                )
+                tomogram_slice_yx_gray = normalize_min_max(tomogram_slice_yx)
                 ann_slice_yx_gray = np.copy(annotations_zyx[z_slice_idx])
-                visualize_slice(tomogram_slice_gray=tomogram_slice_yx_gray,
-                                ann_slice_gray=ann_slice_yx_gray,
-                                particle_metadata=particle_metadata,
-                                particle_name=particle_name,
-                                slice_idx=z_slice_idx, slice_dim="z")
+                visualize_slice(
+                    tomogram_slice_gray=tomogram_slice_yx_gray,
+                    ann_slice_gray=ann_slice_yx_gray,
+                    particle_metadata=particle_metadata,
+                    particle_name=particle_name,
+                    slice_idx=z_slice_idx,
+                    slice_dim="z",
+                )
 
                 # Visualize the zx slice at y level
                 tomogram_slice_zx = high_res_tomogram_zyx[:, y_slice_idx, :]
-                tomogram_slice_zx_gray = normalize_min_max(
-                    tomogram_slice_zx
-                )
+                tomogram_slice_zx_gray = normalize_min_max(tomogram_slice_zx)
                 ann_slice_zx_gray = np.copy(annotations_zyx[:, y_slice_idx, :])
-                visualize_slice(tomogram_slice_gray=tomogram_slice_zx_gray,
-                                ann_slice_gray=ann_slice_zx_gray,
-                                particle_metadata=particle_metadata,
-                                particle_name=particle_name,
-                                slice_idx=y_slice_idx, slice_dim="y")
+                visualize_slice(
+                    tomogram_slice_gray=tomogram_slice_zx_gray,
+                    ann_slice_gray=ann_slice_zx_gray,
+                    particle_metadata=particle_metadata,
+                    particle_name=particle_name,
+                    slice_idx=y_slice_idx,
+                    slice_dim="y",
+                )
 
                 # Visualize the zy slice at x level
                 tomogram_slice_zy = high_res_tomogram_zyx[:, :, x_slice_idx]
-                tomogram_slice_zy_gray = normalize_min_max(
-                    tomogram_slice_zy
-                )
+                tomogram_slice_zy_gray = normalize_min_max(tomogram_slice_zy)
                 ann_slice_zy_gray = np.copy(annotations_zyx[:, :, x_slice_idx])
-                visualize_slice(tomogram_slice_gray=tomogram_slice_zy_gray,
-                                ann_slice_gray=ann_slice_zy_gray,
-                                particle_metadata=particle_metadata,
-                                particle_name=particle_name,
-                                slice_idx=x_slice_idx, slice_dim="x")
+                visualize_slice(
+                    tomogram_slice_gray=tomogram_slice_zy_gray,
+                    ann_slice_gray=ann_slice_zy_gray,
+                    particle_metadata=particle_metadata,
+                    particle_name=particle_name,
+                    slice_idx=x_slice_idx,
+                    slice_dim="x",
+                )
 
                 cv2.waitKey(0)
                 cv2.destroyAllWindows()
-
 
 
 if __name__ == "__main__":
