@@ -5,6 +5,7 @@ Runtime errors about types are expected
 
 import argparse
 import csv
+import os
 import time
 
 import copick
@@ -152,6 +153,7 @@ def process_all_runs(
     print(f"\nTotal picks found: {len(results)}")
 
     # Write results to CSV
+    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)
     with open(output_csv_path, mode="w", newline="") as file:
         writer = csv.writer(file)
         writer.writerow(["id", "experiment", "particle_type", "x", "y", "z"])
@@ -202,9 +204,8 @@ def do_parsing():
     )
     parser.add_argument(
         "--output_csv_path",
-        required=False,
+        required=True,
         type=str,
-        default="./dataset/working/baseline_submission.csv",
         help="Output CSV path with predictions",
     )
     args = parser.parse_args()
