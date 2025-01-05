@@ -5,10 +5,10 @@ import torch
 import torch.nn.functional as F
 import zarr
 from copick.impl.filesystem import CopickRunFSSpec
-from skimage.morphology import ball
 from scipy.cluster.hierarchy import fcluster, linkage
-from sklearn.metrics import pairwise_distances
 from scipy.spatial import distance
+from skimage.morphology import ball
+from sklearn.metrics import pairwise_distances
 
 
 def gaussian_kernel(size: Tuple[int, int, int], sigma: int, device: str):
@@ -244,18 +244,24 @@ def get_tomogram_data(
         )  # Scale factor is 2 for level 1
         scale_factor = 2
 
-    return torch.tensor(tomogram).to(device), effective_voxel_spacing, scale_factor
+    return (
+        torch.tensor(tomogram).to(device),
+        effective_voxel_spacing,
+        scale_factor,
+    )
 
 
 def remove_repeated_picks_v2(coordinates, distanceThreshold, pixelSize=1):
     # Calculate the distance matrix for the 3D coordinates
-    dist_matrix = distance.cdist(coordinates[:, :3] / pixelSize, coordinates[:, :3] / pixelSize)
+    dist_matrix = distance.cdist(
+        coordinates[:, :3] / pixelSize, coordinates[:, :3] / pixelSize
+    )
 
     # Create a linkage matrix using single linkage method
-    Z = linkage(dist_matrix, method='complete')
+    Z = linkage(dist_matrix, method="complete")
 
     # Form flat clusters with a distance threshold to determine groups
-    clusters = fcluster(Z, t=distanceThreshold, criterion='distance')
+    clusters = fcluster(Z, t=distanceThreshold, criterion="distance")
 
     # Initialize an array to store the average of each group
     unique_coordinates = np.zeros((max(clusters), coordinates.shape[1]))
@@ -272,12 +278,14 @@ def remove_repeated_picks(coordinates, distanceThreshold, pixelSize=1):
     dist_matrix = pairwise_distances(coordinates)
 
     # Use hierarchical clustering to group close points
-    distanceThreshold = distanceThreshold ** 2
-    linkage_matrix = linkage(dist_matrix, method='single', metric='euclidean')
-    labels = fcluster(linkage_matrix, t=distanceThreshold, criterion='distance')
+    distanceThreshold = distanceThreshold**2
+    linkage_matrix = linkage(dist_matrix, method="single", metric="euclidean")
+    labels = fcluster(linkage_matrix, t=distanceThreshold, criterion="distance")
 
     # Calculate the average coordinates for each group
     unique_labels = np.unique(labels)
-    filteredCoordinates = np.array([coordinates[labels == label].mean(axis=0) for label in unique_labels])
+    filteredCoordinates = np.array(
+        [coordinates[labels == label].mean(axis=0) for label in unique_labels]
+    )
 
     return filteredCoordinates

@@ -1,3 +1,7 @@
 .idea
 dataset
 outputs
+
+# Notebooks
+.ipynb_checkpoints
+data/.ipynb_checkpoints
