@@ -1,6 +1,8 @@
 """
 Code copied from the official notebook https://www.kaggle.com/code/kharrington/blobdetector
 Runtime errors about types are expected
+
+Create a submission CSV starting from copick format
 """
 
 import argparse
