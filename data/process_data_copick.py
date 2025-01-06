@@ -1,3 +1,6 @@
+"""
+Save annotations for each experiment as 3D numpy arrays
+"""
 import argparse
 import os
 import shutil
@@ -5,8 +8,11 @@ from typing import Tuple
 
 import copick
 import numpy as np
+import scipy.ndimage as ndimage
 import zarr
 from tqdm import tqdm
+
+from shared.processing import remove_repeated_picks
 
 
 def set_sphere_to_label(
@@ -27,6 +33,59 @@ def set_sphere_to_label(
                 )
                 if square_norm_distance <= 1.0:
                     cube_zyx_inout[z][y][x] = label
+
+
+def extract_coords(
+    particle_metadata,
+    labelmap,
+    voxel_size=10,
+    min_protein_size=0.4,
+    remove_index=0,
+):
+    label = particle_metadata["label"]
+    label_objs, num_objs = ndimage.label(labelmap == label)
+
+    # Filter Candidates based on Object Size
+    # Get the sizes of all objects
+    object_sizes = np.bincount(label_objs.flat)
+
+    # Filter the objects based on size
+    min_object_size = (
+        4
+        / 3
+        * np.pi
+        * ((particle_metadata["radius"] / voxel_size) ** 2)
+        * min_protein_size
+    )
+    valid_objects = np.where(object_sizes > min_object_size)[0]
+
+    # Estimate Coordiantes from CoM for LabelMaps
+    deepFinderCoords = []
+    for object_num in tqdm(valid_objects):
+        com = ndimage.center_of_mass(label_objs == object_num)
+        swapped_com = (com[2], com[1], com[0])
+        deepFinderCoords.append(swapped_com)
+    deepFinderCoords = np.array(deepFinderCoords)
+
+    # For some reason, consistently extracting center coordinate
+    # Remove the row with the closest index
+    deepFinderCoords = np.delete(deepFinderCoords, remove_index, axis=0)
+
+    # Estimate Distance Threshold Based on 1/2 of Particle Diameter
+    threshold = np.ceil(particle_metadata["radius"] / (voxel_size * 3))
+
+    try:
+        # Remove Double Counted Coordinates
+        deepFinderCoords = remove_repeated_picks(deepFinderCoords, threshold)
+
+        # Convert from Voxel to Physical Units
+        deepFinderCoords *= voxel_size
+
+    except Exception as e:
+        print(f"Error processing label {label} in tomo: {e}")
+        deepFinderCoords = np.array([]).reshape(0, 6)
+
+    return deepFinderCoords
 
 
 def do_parsing():
@@ -110,6 +169,8 @@ def main():
                 particle_name, user_id="curation", session_id="0"
             )
             assert len(picks) == 1
+
+            print(f"Experiment {run.name}, particle {particle_name}: found {len(picks[0].points)} points")
             # Draw sphere manually setting to label every point at distance <= radius from the center
             # Do the comparison in a cube around the center to speed up the comparison
             for point in picks[0].points:
@@ -152,6 +213,19 @@ def main():
                     radius=radius,
                     label=particles[particle_name]["label"],
                 )
+
+        # TODO: Trying to extract again the centroid from the sphere. It doesn't work,
+        # until this is not fixed we can't extract the inference results correctly
+
+        for particle_name, particle_metadata in tqdm(
+            particles.items(), desc="particle"
+        ):
+            re_extracted_coords = extract_coords(
+                particle_metadata, annotations_zyx
+            )
+            print(f"Experiment {run.name}, particle {particle_name}: re-extracted coords {len(re_extracted_coords)}")
+            for coord in re_extracted_coords:
+                print(f"Particle name {particle_name}: {coord}")
 
         output_npy_filepath = os.path.join(args.output_dir, f"{run.name}.npy")
         os.makedirs(os.path.dirname(output_npy_filepath), exist_ok=True)
