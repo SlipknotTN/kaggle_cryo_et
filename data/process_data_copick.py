@@ -12,7 +12,7 @@ import scipy.ndimage as ndimage
 import zarr
 from tqdm import tqdm
 
-from shared.processing import remove_repeated_picks
+from shared.processing import calc_distances_matrix, remove_repeated_picks
 
 
 def set_sphere_to_label(
@@ -35,13 +35,18 @@ def set_sphere_to_label(
                     cube_zyx_inout[z][y][x] = label
 
 
-def extract_coords(
+def extract_coords_from_volume(
     particle_metadata,
     labelmap,
     voxel_size=10,
     min_protein_size=0.4,
     remove_index=0,
 ):
+    """
+    Extract particle coordinates from labeled volume (each value corresponds to a particle label)
+
+    The logic is based on detecting the center of mass of each structured element in the volume
+    """
     label = particle_metadata["label"]
     label_objs, num_objs = ndimage.label(labelmap == label)
 
@@ -113,6 +118,13 @@ def do_parsing():
         help="Voxel spacing used to produce the data",
     )
     parser.add_argument(
+        "--annotation_type",
+        required=True,
+        type=str,
+        choices=["point", "sphere"],
+        help="Particle annotation shape: exact ground truth point or sphere around the point with the particle radius",
+    )
+    parser.add_argument(
         "--output_dir",
         required=True,
         type=str,
@@ -162,6 +174,8 @@ def main():
             shape=high_res_tomogram_zyx.shape, dtype=np.uint8
         )
 
+        points_per_particle = dict()
+
         for particle_name, particle_metadata in tqdm(
             particles.items(), desc="particle"
         ):
@@ -170,7 +184,12 @@ def main():
             )
             assert len(picks) == 1
 
-            print(f"Experiment {run.name}, particle {particle_name}: found {len(picks[0].points)} points")
+            print(
+                f"Experiment {run.name}, particle {particle_name}: found {len(picks[0].points)} points"
+            )
+
+            points_per_particle[particle_name] = len(picks[0].points)
+
             # Draw sphere manually setting to label every point at distance <= radius from the center
             # Do the comparison in a cube around the center to speed up the comparison
             for point in picks[0].points:
@@ -180,52 +199,85 @@ def main():
                     round(point.location.y / args.voxel_spacing),
                     round(point.location.z / args.voxel_spacing),
                 )
-                radius = round(
-                    particles[particle_name]["radius"] / args.voxel_spacing
-                )
-                # Crop annotations_zyx around the cube around the sphere
-                min_cube_point_z = max(0, point_z - radius)
-                max_cube_point_z = min(
-                    annotations_zyx.shape[0] - 1, point_z + radius
-                )
-                min_cube_point_y = max(0, point_y - radius)
-                max_cube_point_y = min(
-                    annotations_zyx.shape[1] - 1, point_y + radius
-                )
-                min_cube_point_x = max(0, point_x - radius)
-                max_cube_point_x = min(
-                    annotations_zyx.shape[2] - 1, point_x + radius
-                )
-                cube = annotations_zyx[
-                    min_cube_point_z:max_cube_point_z,
-                    min_cube_point_y:max_cube_point_y,
-                    min_cube_point_x:max_cube_point_x,
-                ]
-                cube_center_zyx = (
-                    point_z - min_cube_point_z,
-                    point_y - min_cube_point_y,
-                    point_x - min_cube_point_x,
-                )
-                # First one preferred
-                set_sphere_to_label(
-                    cube_zyx_inout=cube,
-                    center_zyx=cube_center_zyx,
-                    radius=radius,
-                    label=particles[particle_name]["label"],
-                )
+                if args.annotation_type == "sphere":
+                    # Radius in voxel coordinates
+                    radius_voxel = round(
+                        particles[particle_name]["radius"] / args.voxel_spacing
+                    )
+                    # Crop annotations_zyx around the cube around the sphere
+                    min_cube_point_z = max(0, point_z - radius_voxel)
+                    max_cube_point_z = min(
+                        annotations_zyx.shape[0] - 1, point_z + radius_voxel
+                    )
+                    min_cube_point_y = max(0, point_y - radius_voxel)
+                    max_cube_point_y = min(
+                        annotations_zyx.shape[1] - 1, point_y + radius_voxel
+                    )
+                    min_cube_point_x = max(0, point_x - radius_voxel)
+                    max_cube_point_x = min(
+                        annotations_zyx.shape[2] - 1, point_x + radius_voxel
+                    )
+                    cube = annotations_zyx[
+                        min_cube_point_z:max_cube_point_z,
+                        min_cube_point_y:max_cube_point_y,
+                        min_cube_point_x:max_cube_point_x,
+                    ]
+                    cube_center_zyx = (
+                        point_z - min_cube_point_z,
+                        point_y - min_cube_point_y,
+                        point_x - min_cube_point_x,
+                    )
+                    # First one preferred
+                    set_sphere_to_label(
+                        cube_zyx_inout=cube,
+                        center_zyx=cube_center_zyx,
+                        radius=radius_voxel,
+                        label=particles[particle_name]["label"],
+                    )
 
-        # TODO: Trying to extract again the centroid from the sphere. It doesn't work,
-        # until this is not fixed we can't extract the inference results correctly
+                elif args.annotation_type == "point":
+                    annotations_zyx[point_z][point_y][point_x] = particles[
+                        particle_name
+                    ]["label"]
 
-        for particle_name, particle_metadata in tqdm(
-            particles.items(), desc="particle"
-        ):
-            re_extracted_coords = extract_coords(
-                particle_metadata, annotations_zyx
+                else:
+                    raise Exception(
+                        f"Annotation type {args.annotation_type} not supported"
+                    )
+
+            # Calculate distances between all points of the same particle
+            distances_matrix = calc_distances_matrix(picks[0].points)
+            # Identify spheres around particles that overlaps
+            # (use triangular matrix to avoid returning the opposite indexes couple)
+            distances_matrix_triangular = np.triu(distances_matrix, 0)
+            closest_points_indexes = np.argwhere(
+                (distances_matrix_triangular > 0.0)
+                & (
+                    distances_matrix_triangular
+                    <= particles[particle_name]["radius"] * 2
+                )
             )
-            print(f"Experiment {run.name}, particle {particle_name}: re-extracted coords {len(re_extracted_coords)}")
-            for coord in re_extracted_coords:
-                print(f"Particle name {particle_name}: {coord}")
+            if len(closest_points_indexes) > 0:
+                print(
+                    f"WARNING: Experiment {run.name}, particle {particle_name} "
+                    f"has these points closest than (radius x 2): {closest_points_indexes}"
+                )
+
+        # Trying to extract again the centroid from the sphere.
+        # It doesn't work when the points are too close (less than radius distance)
+        # and they recognized as a single object
+        if args.annotation_type == "sphere":
+            for particle_name, particle_metadata in tqdm(
+                particles.items(), desc="particle"
+            ):
+                re_extracted_coords = extract_coords_from_volume(
+                    particle_metadata, annotations_zyx
+                )
+                print(
+                    f"Experiment {run.name}, particle {particle_name}: "
+                    f"re-extracted points from sphere "
+                    f"{len(re_extracted_coords)} Vs {points_per_particle[particle_name]} originally"
+                )
 
         output_npy_filepath = os.path.join(args.output_dir, f"{run.name}.npy")
         os.makedirs(os.path.dirname(output_npy_filepath), exist_ok=True)

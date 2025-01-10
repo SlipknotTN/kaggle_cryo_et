@@ -1,12 +1,14 @@
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 import torch
 import torch.nn.functional as F
 import zarr
 from copick.impl.filesystem import CopickRunFSSpec
+from copick.models import CopickPoint
 from scipy.cluster.hierarchy import fcluster, linkage
 from scipy.spatial import distance
+from scipy.spatial.distance import cdist
 from skimage.morphology import ball
 from sklearn.metrics import pairwise_distances
 
@@ -289,3 +291,11 @@ def remove_repeated_picks(coordinates, distanceThreshold, pixelSize=1):
     )
 
     return filteredCoordinates
+
+
+def calc_distances_matrix(points: List[CopickPoint]):
+    points_coordinates = [
+        np.array([point.location.x, point.location.y, point.location.z])
+        for point in points
+    ]
+    return cdist(points_coordinates, points_coordinates, "euclidean")
