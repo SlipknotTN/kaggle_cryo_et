@@ -132,17 +132,17 @@ def process_all_runs(
                     results.append(row)
                     pick_id += 1
 
-                # Store pick set
-                pick_set.points = [
-                    {
-                        "x": c[2] * voxel_spacing,
-                        "y": c[1] * voxel_spacing,
-                        "z": c[0] * voxel_spacing,
-                    }
-                    for c in centroids
-                ]
-                pick_set.store()
-                print(f"Saved {len(centroids)} centroids for {obj.name}")
+                # Store pick set (commented to avoid overwriting the overlay jsons)
+                # pick_set.points = [
+                #     {
+                #         "x": c[2] * voxel_spacing,
+                #         "y": c[1] * voxel_spacing,
+                #         "z": c[0] * voxel_spacing,
+                #     }
+                #     for c in centroids
+                # ]
+                # pick_set.store()
+                # print(f"Saved {len(centroids)} centroids for {obj.name}")
             else:
                 print(f"No valid centroids found for {obj.name}")
 

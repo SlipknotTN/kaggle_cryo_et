@@ -1,2 +1,3 @@
-# TODO: Check multiple annotations in the same space, is instance level segmentation all vs all?
-# TODO: Visualization annotations as 3D point cloud
+# TODO: Debug input format for baseline hessian function (float?! range?!)
+# TODO: Test extract coords v2 on the whole annotated volume at one time instead of single particles
+(add break to test only one particle at the beginning)

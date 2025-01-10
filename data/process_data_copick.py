@@ -4,15 +4,25 @@ Save annotations for each experiment as 3D numpy arrays
 import argparse
 import os
 import shutil
-from typing import Tuple
+from typing import List, Tuple
 
 import copick
 import numpy as np
-import scipy.ndimage as ndimage
+import scipy.ndimage as ndi
+import torch
 import zarr
+from skimage.measure import regionprops
+from skimage.segmentation import watershed
 from tqdm import tqdm
 
-from shared.processing import calc_distances_matrix, remove_repeated_picks
+from shared.processing import (
+    calc_distances_matrix,
+    create_hessian_particle_mask,
+    distance_transform,
+    erode_dilate_mask,
+    local_maxima,
+    remove_repeated_picks
+)
 
 
 def set_sphere_to_label(
@@ -48,7 +58,7 @@ def extract_coords_from_volume(
     The logic is based on detecting the center of mass of each structured element in the volume
     """
     label = particle_metadata["label"]
-    label_objs, num_objs = ndimage.label(labelmap == label)
+    label_objs, num_objs = ndi.label(labelmap == label)
 
     # Filter Candidates based on Object Size
     # Get the sizes of all objects
@@ -67,7 +77,7 @@ def extract_coords_from_volume(
     # Estimate Coordiantes from CoM for LabelMaps
     deepFinderCoords = []
     for object_num in tqdm(valid_objects):
-        com = ndimage.center_of_mass(label_objs == object_num)
+        com = ndi.center_of_mass(label_objs == object_num)
         swapped_com = (com[2], com[1], com[0])
         deepFinderCoords.append(swapped_com)
     deepFinderCoords = np.array(deepFinderCoords)
@@ -91,6 +101,52 @@ def extract_coords_from_volume(
         deepFinderCoords = np.array([]).reshape(0, 6)
 
     return deepFinderCoords
+
+
+def extract_coords_from_volume_v2(volume: torch.Tensor, scaled_radius, particle_metadata, device="cuda") -> List[np.ndarray]:
+    volume = volume.to(device)
+
+    label = particle_metadata["label"]
+
+    # Filter the volume on the specific particle (not strictly necessary, we could evaluate all particles together)
+    volume_particle = torch.where(volume == label, 1.0, 0.0)
+
+    # Create segmentation at appropriate scale
+    # Returns sum == zero with this input
+    processed_volume = create_hessian_particle_mask(
+        volume_particle, sigma=3, device=device
+    )
+
+    if torch.sum(processed_volume) == 0:
+        return []
+
+    # Erode and dilate the segmentation
+    dilated_mask = erode_dilate_mask(
+        volume_particle, scaled_radius, device=device
+    )
+
+    # Distance transform and local maxima detection
+    distance = distance_transform(dilated_mask, device=device)
+    local_max = local_maxima(distance, scaled_radius)
+
+    # Convert tensors to numpy for watershed
+    local_max_np = local_max.cpu().numpy()
+    distance_np = distance.cpu().numpy()
+    dilated_mask_np = dilated_mask.cpu().numpy()
+
+    # Watershed segmentation
+    markers, _ = ndi.label(local_max_np)
+    watershed_labels = watershed(
+        -distance_np, markers, mask=dilated_mask_np
+    )
+
+    # Extract region properties and scale coordinates back to original space
+    centroids = []
+    for region in regionprops(watershed_labels):
+        # Scale the centroid coordinates back to original space
+        centroid = np.array(region.centroid)
+        centroids.append(centroid)
+    return centroids
 
 
 def do_parsing():
@@ -277,6 +333,15 @@ def main():
                     f"Experiment {run.name}, particle {particle_name}: "
                     f"re-extracted points from sphere "
                     f"{len(re_extracted_coords)} Vs {points_per_particle[particle_name]} originally"
+                )
+
+                re_extracted_coords_v2 = extract_coords_from_volume_v2(
+                    volume=torch.tensor(annotations_zyx), scaled_radius=radius_voxel, particle_metadata=particle_metadata
+                )
+                print(
+                    f"Experiment {run.name}, particle {particle_name}: "
+                    f"re-extracted points from sphere V2 "
+                    f"{len(re_extracted_coords_v2)} Vs {points_per_particle[particle_name]} originally"
                 )
 
         output_npy_filepath = os.path.join(args.output_dir, f"{run.name}.npy")
