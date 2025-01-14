@@ -21,7 +21,7 @@ from shared.processing import (
     distance_transform,
     erode_dilate_mask,
     local_maxima,
-    remove_repeated_picks
+    remove_repeated_picks,
 )
 
 
@@ -48,6 +48,7 @@ def set_sphere_to_label(
 def extract_coords_from_volume(
     particle_metadata,
     labelmap,
+    radius,
     voxel_size=10,
     min_protein_size=0.4,
     remove_index=0,
@@ -66,11 +67,7 @@ def extract_coords_from_volume(
 
     # Filter the objects based on size
     min_object_size = (
-        4
-        / 3
-        * np.pi
-        * ((particle_metadata["radius"] / voxel_size) ** 2)
-        * min_protein_size
+        4 / 3 * np.pi * ((radius / voxel_size) ** 2) * min_protein_size
     )
     valid_objects = np.where(object_sizes > min_object_size)[0]
 
@@ -87,7 +84,7 @@ def extract_coords_from_volume(
     deepFinderCoords = np.delete(deepFinderCoords, remove_index, axis=0)
 
     # Estimate Distance Threshold Based on 1/2 of Particle Diameter
-    threshold = np.ceil(particle_metadata["radius"] / (voxel_size * 3))
+    threshold = np.ceil(radius / (voxel_size * 3))
 
     try:
         # Remove Double Counted Coordinates
@@ -103,7 +100,12 @@ def extract_coords_from_volume(
     return deepFinderCoords
 
 
-def extract_coords_from_volume_v2(volume: torch.Tensor, scaled_radius, particle_metadata, device="cuda") -> List[np.ndarray]:
+def extract_coords_from_volume_v2(
+    volume: torch.Tensor, scaled_radius, particle_metadata, device="cuda"
+) -> List[np.ndarray]:
+    # TODO: Not working with spheres as annotations, but it works with tomograms_tensors + binary_mask from hessian
+    # in the baseline script. Here it always returns an empty list of centroids
+
     volume = volume.to(device)
 
     label = particle_metadata["label"]
@@ -111,13 +113,7 @@ def extract_coords_from_volume_v2(volume: torch.Tensor, scaled_radius, particle_
     # Filter the volume on the specific particle (not strictly necessary, we could evaluate all particles together)
     volume_particle = torch.where(volume == label, 1.0, 0.0)
 
-    # Create segmentation at appropriate scale
-    # Returns sum == zero with this input
-    processed_volume = create_hessian_particle_mask(
-        volume_particle, sigma=3, device=device
-    )
-
-    if torch.sum(processed_volume) == 0:
+    if torch.sum(volume_particle) == 0:
         return []
 
     # Erode and dilate the segmentation
@@ -136,9 +132,7 @@ def extract_coords_from_volume_v2(volume: torch.Tensor, scaled_radius, particle_
 
     # Watershed segmentation
     markers, _ = ndi.label(local_max_np)
-    watershed_labels = watershed(
-        -distance_np, markers, mask=dilated_mask_np
-    )
+    watershed_labels = watershed(-distance_np, markers, mask=dilated_mask_np)
 
     # Extract region properties and scale coordinates back to original space
     centroids = []
@@ -179,6 +173,17 @@ def do_parsing():
         type=str,
         choices=["point", "sphere"],
         help="Particle annotation shape: exact ground truth point or sphere around the point with the particle radius",
+    )
+    parser.add_argument(
+        "--fixed_sphere_radius",
+        required=False,
+        type=float,
+        help="Set sphere radius to a fixed value instead of particle radius. Radius value in the original voxel space.",
+    )
+    parser.add_argument(
+        "--test_extraction_from_spheres",
+        action="store_true",
+        help="Test the centroids extraction from spheres as annotations",
     )
     parser.add_argument(
         "--output_dir",
@@ -246,6 +251,14 @@ def main():
 
             points_per_particle[particle_name] = len(picks[0].points)
 
+            # Radius in voxel coordinates
+            radius = (
+                particles[particle_name]["radius"]
+                if args.fixed_sphere_radius
+                else args.fixed_sphere_radius
+            )
+            radius_voxel = round(radius / args.voxel_spacing)
+
             # Draw sphere manually setting to label every point at distance <= radius from the center
             # Do the comparison in a cube around the center to speed up the comparison
             for point in picks[0].points:
@@ -256,10 +269,6 @@ def main():
                     round(point.location.z / args.voxel_spacing),
                 )
                 if args.annotation_type == "sphere":
-                    # Radius in voxel coordinates
-                    radius_voxel = round(
-                        particles[particle_name]["radius"] / args.voxel_spacing
-                    )
                     # Crop annotations_zyx around the cube around the sphere
                     min_cube_point_z = max(0, point_z - radius_voxel)
                     max_cube_point_z = min(
@@ -308,10 +317,7 @@ def main():
             distances_matrix_triangular = np.triu(distances_matrix, 0)
             closest_points_indexes = np.argwhere(
                 (distances_matrix_triangular > 0.0)
-                & (
-                    distances_matrix_triangular
-                    <= particles[particle_name]["radius"] * 2
-                )
+                & (distances_matrix_triangular <= radius * 2)
             )
             if len(closest_points_indexes) > 0:
                 print(
@@ -322,12 +328,19 @@ def main():
         # Trying to extract again the centroid from the sphere.
         # It doesn't work when the points are too close (less than radius distance)
         # and they recognized as a single object
-        if args.annotation_type == "sphere":
+        if (
+            args.annotation_type == "sphere"
+            and args.test_extraction_from_spheres
+        ):
             for particle_name, particle_metadata in tqdm(
                 particles.items(), desc="particle"
             ):
                 re_extracted_coords = extract_coords_from_volume(
-                    particle_metadata, annotations_zyx
+                    particle_metadata,
+                    annotations_zyx,
+                    radius=particle_metadata["radius"]
+                    if args.fixed_sphere_radius is False
+                    else args.fixed_sphere_radius,
                 )
                 print(
                     f"Experiment {run.name}, particle {particle_name}: "
@@ -336,7 +349,13 @@ def main():
                 )
 
                 re_extracted_coords_v2 = extract_coords_from_volume_v2(
-                    volume=torch.tensor(annotations_zyx), scaled_radius=radius_voxel, particle_metadata=particle_metadata
+                    volume=torch.tensor(annotations_zyx),
+                    scaled_radius=round(
+                        particle_metadata["radius"] / args.voxel_spacing
+                    )
+                    if args.fixed_sphere_radius is False
+                    else round(args.fixed_sphere_radius / args.voxel_spacing),
+                    particle_metadata=particle_metadata,
                 )
                 print(
                     f"Experiment {run.name}, particle {particle_name}: "
