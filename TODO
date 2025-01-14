@@ -1,0 +1,8 @@
+- Return TP, FP, FN from score() function
+- Extract the score script in a separate script which accepts the two CSV files
+- Create a script to save the GT dataframe from copick
+- Create a script to save the postprocessed GT from volumes
+- Fix dataframe save (index column name and index value)
+- Extract points from numpy volumes with points as double check
+- F4 score: 0.9103620180654638 from spheres at particle radius
+- Eval post process with fixed radius for each particle

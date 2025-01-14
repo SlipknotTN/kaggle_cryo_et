@@ -15,14 +15,9 @@ from skimage.measure import regionprops
 from skimage.segmentation import watershed
 from tqdm import tqdm
 
-from shared.processing import (
-    calc_distances_matrix,
-    create_hessian_particle_mask,
-    distance_transform,
-    erode_dilate_mask,
-    local_maxima,
-    remove_repeated_picks,
-)
+from shared.processing import (calc_distances_matrix, distance_transform,
+                               erode_dilate_mask, local_maxima,
+                               remove_repeated_picks)
 
 
 def set_sphere_to_label(
@@ -72,32 +67,33 @@ def extract_coords_from_volume(
     valid_objects = np.where(object_sizes > min_object_size)[0]
 
     # Estimate Coordiantes from CoM for LabelMaps
-    deepFinderCoords = []
+    deepFinderCoords_zyx = []
     for object_num in tqdm(valid_objects):
         com = ndi.center_of_mass(label_objs == object_num)
-        swapped_com = (com[2], com[1], com[0])
-        deepFinderCoords.append(swapped_com)
-    deepFinderCoords = np.array(deepFinderCoords)
+        deepFinderCoords_zyx.append(com)
+    deepFinderCoords_zyx = np.array(deepFinderCoords_zyx)
 
     # For some reason, consistently extracting center coordinate
     # Remove the row with the closest index
-    deepFinderCoords = np.delete(deepFinderCoords, remove_index, axis=0)
+    deepFinderCoords_zyx = np.delete(deepFinderCoords_zyx, remove_index, axis=0)
 
     # Estimate Distance Threshold Based on 1/2 of Particle Diameter
     threshold = np.ceil(radius / (voxel_size * 3))
 
     try:
         # Remove Double Counted Coordinates
-        deepFinderCoords = remove_repeated_picks(deepFinderCoords, threshold)
+        deepFinderCoords_zyx = remove_repeated_picks(
+            deepFinderCoords_zyx, threshold
+        )
 
         # Convert from Voxel to Physical Units
-        deepFinderCoords *= voxel_size
+        deepFinderCoords_zyx *= voxel_size
 
     except Exception as e:
         print(f"Error processing label {label} in tomo: {e}")
-        deepFinderCoords = np.array([]).reshape(0, 6)
+        deepFinderCoords_zyx = np.array([]).reshape(0, 6)
 
-    return deepFinderCoords
+    return deepFinderCoords_zyx
 
 
 def extract_coords_from_volume_v2(
@@ -172,7 +168,7 @@ def do_parsing():
         required=True,
         type=str,
         choices=["point", "sphere"],
-        help="Particle annotation shape: exact ground truth point or sphere around the point with the particle radius",
+        help="Particle annotation shape: exact ground truth point or sphere around the point with a particle radius",
     )
     parser.add_argument(
         "--fixed_sphere_radius",
@@ -186,10 +182,16 @@ def do_parsing():
         help="Test the centroids extraction from spheres as annotations",
     )
     parser.add_argument(
-        "--output_dir",
+        "--output_tomo_dir",
         required=True,
         type=str,
-        help="Output dir to save the input and the labels as numpy arrays",
+        help="Output dir to save the tomograms as 3D zyx numpy arrays",
+    )
+    parser.add_argument(
+        "--output_ann_dir",
+        required=True,
+        type=str,
+        help="Output dir to save the labels as 3D zyx numpy arrays",
     )
     args = parser.parse_args()
     return args
@@ -230,6 +232,15 @@ def main():
         print(
             f"Run {run.name}, high res tomogram shape {high_res_tomogram_zyx.shape}"
         )
+
+        high_res_tomogram_zyx_filepath = os.path.join(
+            args.output_tomo_dir, f"{run.name}.npy"
+        )
+        os.makedirs(
+            os.path.dirname(high_res_tomogram_zyx_filepath), exist_ok=True
+        )
+        np.save(high_res_tomogram_zyx_filepath, high_res_tomogram_zyx)
+        print(f"Saved {high_res_tomogram_zyx_filepath}")
 
         annotations_zyx = np.zeros(
             shape=high_res_tomogram_zyx.shape, dtype=np.uint8
@@ -363,10 +374,12 @@ def main():
                     f"{len(re_extracted_coords_v2)} Vs {points_per_particle[particle_name]} originally"
                 )
 
-        output_npy_filepath = os.path.join(args.output_dir, f"{run.name}.npy")
-        os.makedirs(os.path.dirname(output_npy_filepath), exist_ok=True)
-        np.save(output_npy_filepath, annotations_zyx)
-        print(f"Saved {output_npy_filepath}")
+        output_ann_npy_filepath = os.path.join(
+            args.output_ann_dir, f"{run.name}.npy"
+        )
+        os.makedirs(os.path.dirname(output_ann_npy_filepath), exist_ok=True)
+        np.save(output_ann_npy_filepath, annotations_zyx)
+        print(f"Saved {output_ann_npy_filepath}")
 
 
 if __name__ == "__main__":
